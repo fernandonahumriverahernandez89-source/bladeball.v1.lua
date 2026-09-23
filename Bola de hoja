@@ -1,6 +1,6 @@
 -- ==========================================
--- Blade Ball v3.0 - RemoteEvent Real
--- Usa ParryAttempt:FireServer() directo
+-- Blade Ball v4.0 - RemoteEvent Correcto
+-- Usa ParryButtonPress:Fire()
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13,42 +13,43 @@ local config = {
     autoParry = false,
     autoSpam = false,
     ballESP = false,
-    studs = 25,
+    studs = 60,
     parryDelayMin = 0.10,
     parryDelayMax = 0.15,
     spamDelayMin = 0.12,
     spamDelayMax = 0.18,
-    spamRange = 15,
-    usarRemote = true,  -- 🔥 usar ParryAttempt (recomendado)
+    spamRange = 20,
 }
 
 -- ============================
--- 📡 BUSCAR REMOTE PARRY
+-- 📡 BUSCAR REMOTE CORRECTO (ParryButtonPress)
 -- ============================
 local parryRemote = nil
 
 local function buscarParryRemote()
     if parryRemote and parryRemote.Parent then return parryRemote end
-    -- Buscar en todo ReplicatedStorage
-    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-        if obj:IsA("RemoteEvent") and obj.Name == "ParryAttempt" then
-            parryRemote = obj
-            return parryRemote
-        end
+    
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    if remotes then
+        parryRemote = remotes:FindFirstChild("ParryButtonPress")
     end
-    return nil
+    return parryRemote
 end
 
 -- ============================
--- 🎯 DETECCIÓN DE BOLA (por carpeta Balls)
--- Ahora detecta CUALQUIER BasePart dentro de workspace.Balls
+-- 🎯 DETECCIÓN DE BOLA REAL (usando el atributo realBall)
 -- ============================
 local ballsFolder = nil
-
 local function obtenerBallsFolder()
     if ballsFolder and ballsFolder.Parent then return ballsFolder end
     ballsFolder = workspace:FindFirstChild("Balls")
     return ballsFolder
+end
+
+local function esBolaReal(obj)
+    if not obj:IsA("BasePart") then return false end
+    -- La bola real tiene el atributo "realBall" en true
+    return obj:GetAttribute("realBall") == true
 end
 
 local function obtenerBola()
@@ -62,7 +63,7 @@ local function obtenerBola()
 
     local masCercana, distMin = nil, math.huge
     for _, obj in ipairs(folder:GetChildren()) do
-        if obj:IsA("BasePart") then
+        if esBolaReal(obj) then
             local d = (obj.Position - root.Position).Magnitude
             if d < distMin then
                 distMin = d
@@ -99,34 +100,13 @@ local function jugadorCercano()
 end
 
 -- ============================
--- 🛡️ PARRY POR REMOTE (NUEVO!)
+-- 🛡️ PARRY (con el remote correcto)
 -- ============================
-local function parryRemote()
+local function activarParry()
     local remote = buscarParryRemote()
     if not remote then return false end
-    pcall(function() remote:FireServer() end)
+    pcall(function() remote:Fire() end) -- Se usa :Fire()
     return true
-end
-
--- 🛡️ Parry por Tool (respaldo)
-local function parryTool()
-    local character = LocalPlayer.Character
-    if not character then return false end
-    local tool = character:FindFirstChildOfClass("Tool")
-    if tool then
-        pcall(function() tool:Activate() end)
-        return true
-    end
-    return false
-end
-
--- Combinar
-local function activarParry()
-    if config.usarRemote then
-        parryRemote()
-    else
-        parryTool()
-    end
 end
 
 local function delayHumano(min, max)
@@ -134,7 +114,7 @@ local function delayHumano(min, max)
 end
 
 -- ============================
--- 🎨 UI
+-- 🎨 UI (sin cambios, pero se actualiza el status)
 -- ============================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "BladeBallUI"
@@ -160,7 +140,7 @@ local tituloBtn = Instance.new("TextButton")
 tituloBtn.Size = UDim2.new(1, 0, 0, 28)
 tituloBtn.BackgroundColor3 = Color3.fromRGB(30, 25, 50)
 tituloBtn.BorderSizePixel = 0
-tituloBtn.Text = "Blade Ball v3 (toca)"
+tituloBtn.Text = "Blade Ball v4.0 (toca)"
 tituloBtn.TextColor3 = Color3.fromRGB(180, 140, 255)
 tituloBtn.TextScaled = true
 tituloBtn.Font = Enum.Font.GothamBold
@@ -230,7 +210,7 @@ local sliderLabel = Instance.new("TextLabel")
 sliderLabel.Size = UDim2.new(0.9, 0, 0, 16)
 sliderLabel.Position = UDim2.new(0.05, 0, 0, 92)
 sliderLabel.BackgroundTransparency = 1
-sliderLabel.Text = "Studs: 25"
+sliderLabel.Text = "Studs: 60"
 sliderLabel.TextColor3 = Color3.fromRGB(220, 220, 240)
 sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
 sliderLabel.TextScaled = true
@@ -246,7 +226,7 @@ sliderBG.Parent = contenido
 Instance.new("UICorner", sliderBG).CornerRadius = UDim.new(1, 0)
 
 local sliderFill = Instance.new("Frame")
-sliderFill.Size = UDim2.new(0.05, 0, 1, 0)
+sliderFill.Size = UDim2.new(0.25, 0, 1, 0)
 sliderFill.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
 sliderFill.BorderSizePixel = 0
 sliderFill.Parent = sliderBG
@@ -254,7 +234,7 @@ Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(1, 0)
 
 local sliderBtn = Instance.new("Frame")
 sliderBtn.Size = UDim2.new(0, 14, 0, 14)
-sliderBtn.Position = UDim2.new(0.05, -7, 0.5, -7)
+sliderBtn.Position = UDim2.new(0.25, -7, 0.5, -7)
 sliderBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 sliderBtn.BorderSizePixel = 0
 sliderBtn.Parent = sliderBG
@@ -310,28 +290,7 @@ crearToggle("Parry", 5, function(on) config.autoParry = on end)
 crearToggle("Spam", 35, function(on) config.autoSpam = on end)
 crearToggle("ESP", 65, function(on) config.ballESP = on end)
 
--- Botón para alternar método
-local btnMetodo = Instance.new("TextButton")
-btnMetodo.Size = UDim2.new(0.9, 0, 0, 20)
-btnMetodo.Position = UDim2.new(0.05, 0, 0, 175)
-btnMetodo.BackgroundColor3 = Color3.fromRGB(50, 80, 120)
-btnMetodo.Text = "🔥 Usando: RemoteEvent"
-btnMetodo.TextColor3 = Color3.fromRGB(255, 255, 255)
-btnMetodo.TextScaled = true
-btnMetodo.Font = Enum.Font.Gotham
-btnMetodo.Parent = contenido
-Instance.new("UICorner", btnMetodo).CornerRadius = UDim.new(0, 5)
-
-btnMetodo.MouseButton1Click:Connect(function()
-    config.usarRemote = not config.usarRemote
-    if config.usarRemote then
-        btnMetodo.Text = "🔥 Usando: RemoteEvent"
-        btnMetodo.BackgroundColor3 = Color3.fromRGB(50, 80, 120)
-    else
-        btnMetodo.Text = "🗡️ Usando: Tool:Activate()"
-        btnMetodo.BackgroundColor3 = Color3.fromRGB(80, 50, 120)
-    end
-end)
+-- Se eliminó el botón de método porque ahora solo se usa el remote correcto
 
 -- Minimizar
 local minimizado = false
@@ -345,48 +304,46 @@ tituloBtn.MouseButton1Click:Connect(function()
         TweenService:Create(main, TweenInfo.new(0.3), {Size = UDim2.new(0, 180, 0, 285)}):Play()
         task.wait(0.3)
         contenido.Visible = true
-        tituloBtn.Text = "Blade Ball v3 (toca)"
+        tituloBtn.Text = "Blade Ball v4.0 (toca)"
     end
 end)
 
 -- ============================
--- 🔴 ESP
+-- 🔴 ESP (sin parpadeo, como ya teníamos)
 -- ============================
-local highlightActual = nil
+local highlightESP = nil
 
-local function aplicarESP(bola)
-    if not bola then
-        if highlightActual then
-            highlightActual:Destroy()
-            highlightActual = nil
-        end
-        return
-    end
-    if highlightActual and highlightActual.Parent == bola then return end
-    if highlightActual then
-        highlightActual:Destroy()
-        highlightActual = nil
-    end
+local function crearHighlight()
+    if highlightESP and highlightESP.Parent then return highlightESP end
     local hl = Instance.new("Highlight")
+    hl.Name = "BolaESP_BladeBall"
     hl.FillColor = Color3.fromRGB(255, 0, 0)
     hl.OutlineColor = Color3.fromRGB(255, 50, 50)
     hl.FillTransparency = 0.4
     hl.OutlineTransparency = 0
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Adornee = bola
-    hl.Parent = bola
-    highlightActual = hl
+    hl.Parent = screenGui
+    highlightESP = hl
+    return hl
 end
 
-local function limpiarESP()
-    if highlightActual then
-        highlightActual:Destroy()
-        highlightActual = nil
+local function aplicarESP(bola)
+    if not bola then
+        if highlightESP then highlightESP.Adornee = nil end
+        return
+    end
+    local hl = crearHighlight()
+    if hl.Adornee ~= bola then
+        hl.Adornee = bola
     end
 end
 
+local function limpiarESP()
+    if highlightESP then highlightESP.Adornee = nil end
+end
+
 -- ============================
--- 🔄 LOOP PRINCIPAL (optimizado 20 FPS)
+-- 🔄 LOOP PRINCIPAL
 -- ============================
 task.spawn(function()
     local contador = 0
@@ -409,7 +366,7 @@ task.spawn(function()
 
         if config.ballESP then
             aplicarESP(bola)
-        elseif highlightActual then
+        elseif highlightESP and highlightESP.Adornee then
             limpiarESP()
         end
 
@@ -425,4 +382,4 @@ task.spawn(function()
     end
 end)
 
-print("Blade Ball v3.0 cargado - Remote ParryAttempt detectado")
+print("Blade Ball v4.0 cargado - Remote ParryButtonPress")
