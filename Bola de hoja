@@ -1,11 +1,11 @@
 -- ==========================================
--- Blade Ball Mobile v2.0
--- UI compacta + Auto Parry por toque (móvil)
+-- Blade Ball Sigiloso v2.1
+-- Versión móvil con parry por Tool:Activate()
+-- Sin VirtualInputManager (menos detectable)
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
@@ -13,14 +13,16 @@ local config = {
     autoParry = false,
     autoSpam = false,
     ballESP = false,
-    studs = 30,
-    parryDelay = 0.03,
-    spamDelay = 0.08,
-    spamRange = 20,
+    studs = 25,
+    parryDelayMin = 0.12,
+    parryDelayMax = 0.18,
+    spamDelayMin = 0.15,
+    spamDelayMax = 0.22,
+    spamRange = 15,
 }
 
 -- ============================
--- 🎯 DETECCIÓN DE BOLA (ignora BallSpawn)
+-- DETECCION DE BOLA
 -- ============================
 local function esBolaReal(obj)
     if not obj:IsA("BasePart") then return false end
@@ -50,7 +52,6 @@ local function obtenerBola()
             end
         end
     end
-
     if not masCercana then
         for _, obj in ipairs(workspace:GetDescendants()) do
             if esBolaReal(obj) then
@@ -62,12 +63,11 @@ local function obtenerBola()
             end
         end
     end
-
     return masCercana, distMin
 end
 
 -- ============================
--- 👤 JUGADOR MÁS CERCANO (para spam)
+-- JUGADOR CERCANO
 -- ============================
 local function jugadorCercano()
     local character = LocalPlayer.Character
@@ -92,29 +92,23 @@ local function jugadorCercano()
 end
 
 -- ============================
--- 📱 PARRY POR TOQUE (funciona en celular)
+-- PARRY
 -- ============================
-local function tocarPantalla()
-    pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-    end)
-end
-
 local function activarParry()
-    tocarPantalla()
-
     local character = LocalPlayer.Character
-    if character then
-        local tool = character:FindFirstChildOfClass("Tool")
-        if tool then
-            pcall(function() tool:Activate() end)
-        end
+    if not character then return end
+    local tool = character:FindFirstChildOfClass("Tool")
+    if tool then
+        pcall(function() tool:Activate() end)
     end
 end
 
+local function delayHumano(min, max)
+    return min + math.random() * (max - min)
+end
+
 -- ============================
--- 🎨 UI COMPACTA (móvil)
+-- UI
 -- ============================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "BladeBallUI"
@@ -140,7 +134,7 @@ local tituloBtn = Instance.new("TextButton")
 tituloBtn.Size = UDim2.new(1, 0, 0, 28)
 tituloBtn.BackgroundColor3 = Color3.fromRGB(30, 25, 50)
 tituloBtn.BorderSizePixel = 0
-tituloBtn.Text = "⚔️ Blade Ball (toca)"
+tituloBtn.Text = "Blade Ball (toca)"
 tituloBtn.TextColor3 = Color3.fromRGB(180, 140, 255)
 tituloBtn.TextScaled = true
 tituloBtn.Font = Enum.Font.GothamBold
@@ -153,9 +147,6 @@ contenido.Position = UDim2.new(0, 0, 0, 28)
 contenido.BackgroundTransparency = 1
 contenido.Parent = main
 
--- ============================
--- 🔘 TOGGLE
--- ============================
 local function crearToggle(nombre, posY, callback)
     local boton = Instance.new("TextButton")
     boton.Size = UDim2.new(0.9, 0, 0, 26)
@@ -208,14 +199,12 @@ local function crearToggle(nombre, posY, callback)
     end)
 end
 
--- ============================
--- 🎚️ SLIDER STUDS
--- ============================
+-- Slider
 local sliderLabel = Instance.new("TextLabel")
 sliderLabel.Size = UDim2.new(0.9, 0, 0, 16)
 sliderLabel.Position = UDim2.new(0.05, 0, 0, 92)
 sliderLabel.BackgroundTransparency = 1
-sliderLabel.Text = "📏 Studs: 30"
+sliderLabel.Text = "Studs: 25"
 sliderLabel.TextColor3 = Color3.fromRGB(220, 220, 240)
 sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
 sliderLabel.TextScaled = true
@@ -231,7 +220,7 @@ sliderBG.Parent = contenido
 Instance.new("UICorner", sliderBG).CornerRadius = UDim.new(1, 0)
 
 local sliderFill = Instance.new("Frame")
-sliderFill.Size = UDim2.new(0.1, 0, 1, 0)
+sliderFill.Size = UDim2.new(0.05, 0, 1, 0)
 sliderFill.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
 sliderFill.BorderSizePixel = 0
 sliderFill.Parent = sliderBG
@@ -239,7 +228,7 @@ Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(1, 0)
 
 local sliderBtn = Instance.new("Frame")
 sliderBtn.Size = UDim2.new(0, 14, 0, 14)
-sliderBtn.Position = UDim2.new(0.1, -7, 0.5, -7)
+sliderBtn.Position = UDim2.new(0.05, -7, 0.5, -7)
 sliderBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 sliderBtn.BorderSizePixel = 0
 sliderBtn.Parent = sliderBG
@@ -254,7 +243,7 @@ local function actualizarSlider(inputX)
     sliderFill.Size = UDim2.new(porcentaje, 0, 1, 0)
     sliderBtn.Position = UDim2.new(porcentaje, -7, 0.5, -7)
     config.studs = math.floor(minStuds + (maxStuds - minStuds) * porcentaje)
-    sliderLabel.Text = "📏 Studs: " .. config.studs
+    sliderLabel.Text = "Studs: " .. config.studs
 end
 
 sliderBtn.InputBegan:Connect(function(input)
@@ -284,7 +273,7 @@ status.Size = UDim2.new(0.9, 0, 0, 30)
 status.Position = UDim2.new(0.05, 0, 0, 130)
 status.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 status.BorderSizePixel = 0
-status.Text = "🔍 Buscando..."
+status.Text = "Buscando..."
 status.TextColor3 = Color3.fromRGB(200, 200, 220)
 status.TextScaled = true
 status.Font = Enum.Font.Gotham
@@ -292,58 +281,58 @@ status.TextWrapped = true
 status.Parent = contenido
 Instance.new("UICorner", status).CornerRadius = UDim.new(0, 5)
 
--- Botones
-crearToggle("🛡️ Parry", 5, function(on) config.autoParry = on end)
-crearToggle("⚡ Spam", 35, function(on) config.autoSpam = on end)
-crearToggle("🔴 ESP", 65, function(on) config.ballESP = on end)
+crearToggle("Parry", 5, function(on) config.autoParry = on end)
+crearToggle("Spam", 35, function(on) config.autoSpam = on end)
+crearToggle("ESP", 65, function(on) config.ballESP = on end)
 
--- ============================
--- 🎯 MINIMIZAR
--- ============================
+-- Minimizar
 local minimizado = false
 tituloBtn.MouseButton1Click:Connect(function()
     minimizado = not minimizado
     if minimizado then
         TweenService:Create(main, TweenInfo.new(0.3), {Size = UDim2.new(0, 120, 0, 28)}):Play()
         contenido.Visible = false
-        tituloBtn.Text = "⚔️ Abrir"
+        tituloBtn.Text = "Abrir"
     else
         TweenService:Create(main, TweenInfo.new(0.3), {Size = UDim2.new(0, 180, 0, 250)}):Play()
         task.wait(0.3)
         contenido.Visible = true
-        tituloBtn.Text = "⚔️ Blade Ball (toca)"
+        tituloBtn.Text = "Blade Ball (toca)"
     end
 end)
 
 -- ============================
--- 🔴 ESP
+-- ESP con BillboardGui
 -- ============================
 local function aplicarESP(bola)
-    if bola and not bola:FindFirstChildOfClass("Highlight") then
-        local hl = Instance.new("Highlight")
-        hl.FillColor = Color3.fromRGB(255, 0, 0)
-        hl.OutlineColor = Color3.fromRGB(255, 0, 0)
-        hl.FillTransparency = 0.3
-        hl.OutlineTransparency = 0
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        hl.Adornee = bola
-        hl.Parent = bola
+    if bola and not bola:FindFirstChild("BolaESP") then
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "BolaESP"
+        billboard.Size = UDim2.new(3, 0, 3, 0)
+        billboard.AlwaysOnTop = true
+        billboard.Adornee = bola
+        billboard.Parent = bola
+
+        local circulo = Instance.new("Frame")
+        circulo.Size = UDim2.new(1, 0, 1, 0)
+        circulo.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        circulo.BackgroundTransparency = 0.5
+        circulo.BorderSizePixel = 0
+        circulo.Parent = billboard
+        Instance.new("UICorner", circulo).CornerRadius = UDim.new(1, 0)
     end
 end
 
 local function limpiarESP()
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Highlight") then
-            local ad = obj.Adornee
-            if ad and esBolaReal(ad) then
-                obj:Destroy()
-            end
+        if obj.Name == "BolaESP" then
+            obj:Destroy()
         end
     end
 end
 
 -- ============================
--- 🔄 LOOP PRINCIPAL
+-- LOOP PRINCIPAL
 -- ============================
 task.spawn(function()
     while true do
@@ -353,9 +342,9 @@ task.spawn(function()
         local jog, distJog = jugadorCercano()
 
         if bola then
-            status.Text = string.format("🎯 %.0f | 👤 %.0f", dist or 0, distJog or 0)
+            status.Text = string.format("Bola: %.0f | Jug: %.0f", dist or 0, distJog or 0)
         else
-            status.Text = "❌ Sin bola | 👤 " .. string.format("%.0f", distJog or 0)
+            status.Text = "Sin bola | Jug: " .. string.format("%.0f", distJog or 0)
         end
 
         if config.ballESP and bola then
@@ -366,14 +355,14 @@ task.spawn(function()
 
         if config.autoParry and bola and dist and dist <= config.studs then
             activarParry()
-            task.wait(config.parryDelay)
+            task.wait(delayHumano(config.parryDelayMin, config.parryDelayMax))
         end
 
         if config.autoSpam and jog and distJog and distJog <= config.spamRange then
             activarParry()
-            task.wait(config.spamDelay)
+            task.wait(delayHumano(config.spamDelayMin, config.spamDelayMax))
         end
     end
 end)
 
-print("✅ Blade Ball Mobile v2.0 cargado")
+print("Blade Ball Sigiloso v2.1 cargado")
