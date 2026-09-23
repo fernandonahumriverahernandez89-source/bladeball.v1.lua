@@ -1,7 +1,11 @@
--- Blade Ball UI v1.1 - Busca bola dinámicamente
+-- ==========================================
+-- Blade Ball Mobile v2.0
+-- UI compacta + Auto Parry por toque (móvil)
+-- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
@@ -9,67 +13,108 @@ local config = {
     autoParry = false,
     autoSpam = false,
     ballESP = false,
-    studs = 60,
-    parryDelay = 0.05,
-    spamDelay = 0.1,
+    studs = 30,
+    parryDelay = 0.03,
+    spamDelay = 0.08,
+    spamRange = 20,
 }
 
 -- ============================
--- 🎯 BUSCAR BOLA (más flexible)
+-- 🎯 DETECCIÓN DE BOLA (ignora BallSpawn)
 -- ============================
+local function esBolaReal(obj)
+    if not obj:IsA("BasePart") then return false end
+    local n = string.lower(obj.Name)
+    if n:find("spawn") then return false end
+    if n:find("decal") then return false end
+    if n:find("marker") then return false end
+    return n == "ball" or n == "bola" or n:find("^ball") or n:find("^bola")
+end
+
 local function obtenerBola()
     local character = LocalPlayer.Character
     if not character then return nil, nil end
     local root = character:FindFirstChild("HumanoidRootPart")
     if not root then return nil, nil end
 
-    local masCercana, distanciaMin = nil, math.huge
-
-    -- Buscar en TODO el workspace
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            local n = string.lower(obj.Name)
-            local esBola = n:find("ball") or n:find("bola") or n == "sphere"
-            if esBola then
+    local masCercana, distMin = nil, math.huge
+    local ballsFolder = workspace:FindFirstChild("Balls")
+    if ballsFolder then
+        for _, obj in ipairs(ballsFolder:GetChildren()) do
+            if esBolaReal(obj) then
                 local d = (obj.Position - root.Position).Magnitude
-                if d < distanciaMin then
-                    distanciaMin = d
+                if d < distMin then
+                    distMin = d
                     masCercana = obj
                 end
             end
         end
     end
-    return masCercana, distanciaMin
-end
 
--- ============================
--- 🛡️ PARRY (con múltiples métodos)
--- ============================
-local function activarParry()
-    local character = LocalPlayer.Character
-    if not character then return false end
-
-    local tool = character:FindFirstChildOfClass("Tool")
-    if tool then
-        pcall(function() tool:Activate() end)
-        return true
-    end
-
-    -- Alternativa: buscar en backpack
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        for _, t in ipairs(backpack:GetChildren()) do
-            if t:IsA("Tool") then
-                pcall(function() t:Activate() end)
-                return true
+    if not masCercana then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if esBolaReal(obj) then
+                local d = (obj.Position - root.Position).Magnitude
+                if d < distMin then
+                    distMin = d
+                    masCercana = obj
+                end
             end
         end
     end
-    return false
+
+    return masCercana, distMin
 end
 
 -- ============================
--- UI (igual que antes pero con status)
+-- 👤 JUGADOR MÁS CERCANO (para spam)
+-- ============================
+local function jugadorCercano()
+    local character = LocalPlayer.Character
+    if not character then return nil, nil end
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil, nil end
+
+    local masCercano, distMin = nil, math.huge
+    for _, jugador in ipairs(Players:GetPlayers()) do
+        if jugador ~= LocalPlayer and jugador.Character then
+            local hrp = jugador.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local d = (hrp.Position - root.Position).Magnitude
+                if d < distMin then
+                    distMin = d
+                    masCercano = jugador
+                end
+            end
+        end
+    end
+    return masCercano, distMin
+end
+
+-- ============================
+-- 📱 PARRY POR TOQUE (funciona en celular)
+-- ============================
+local function tocarPantalla()
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+    end)
+end
+
+local function activarParry()
+    tocarPantalla()
+
+    local character = LocalPlayer.Character
+    if character then
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool then
+            pcall(function() tool:Activate() end)
+        end
+    end
+end
+
+-- ============================
+-- 🎨 UI COMPACTA (móvil)
 -- ============================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "BladeBallUI"
@@ -78,58 +123,53 @@ screenGui.IgnoreGuiInset = true
 screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 260, 0, 380)
-main.Position = UDim2.new(0, 30, 0.5, -190)
+main.Size = UDim2.new(0, 180, 0, 250)
+main.Position = UDim2.new(0, 10, 0.4, -125)
 main.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
 main.BorderSizePixel = 0
 main.Active = true
 main.Draggable = true
 main.Parent = screenGui
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 8)
 
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
 local stroke = Instance.new("UIStroke", main)
 stroke.Color = Color3.fromRGB(120, 80, 255)
-stroke.Thickness = 1.5
+stroke.Thickness = 1.2
 
-local titulo = Instance.new("TextLabel")
-titulo.Size = UDim2.new(1, 0, 0, 40)
-titulo.BackgroundColor3 = Color3.fromRGB(30, 25, 50)
-titulo.BorderSizePixel = 0
-titulo.Text = "⚔️ Blade Ball Hub"
-titulo.TextColor3 = Color3.fromRGB(180, 140, 255)
-titulo.TextScaled = true
-titulo.Font = Enum.Font.GothamBold
-titulo.Parent = main
-Instance.new("UICorner", titulo).CornerRadius = UDim.new(0, 10)
+local tituloBtn = Instance.new("TextButton")
+tituloBtn.Size = UDim2.new(1, 0, 0, 28)
+tituloBtn.BackgroundColor3 = Color3.fromRGB(30, 25, 50)
+tituloBtn.BorderSizePixel = 0
+tituloBtn.Text = "⚔️ Blade Ball (toca)"
+tituloBtn.TextColor3 = Color3.fromRGB(180, 140, 255)
+tituloBtn.TextScaled = true
+tituloBtn.Font = Enum.Font.GothamBold
+tituloBtn.Parent = main
+Instance.new("UICorner", tituloBtn).CornerRadius = UDim.new(0, 8)
 
--- Status label (diagnóstico en vivo)
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(0.9, 0, 0, 40)
-status.Position = UDim2.new(0.05, 0, 0, 300)
-status.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-status.BorderSizePixel = 0
-status.Text = "🔍 Buscando bola..."
-status.TextColor3 = Color3.fromRGB(200, 200, 220)
-status.TextScaled = true
-status.Font = Enum.Font.Gotham
-status.TextWrapped = true
-status.Parent = main
-Instance.new("UICorner", status).CornerRadius = UDim.new(0, 6)
+local contenido = Instance.new("Frame")
+contenido.Size = UDim2.new(1, 0, 1, -28)
+contenido.Position = UDim2.new(0, 0, 0, 28)
+contenido.BackgroundTransparency = 1
+contenido.Parent = main
 
+-- ============================
+-- 🔘 TOGGLE
+-- ============================
 local function crearToggle(nombre, posY, callback)
     local boton = Instance.new("TextButton")
-    boton.Size = UDim2.new(0.9, 0, 0, 35)
+    boton.Size = UDim2.new(0.9, 0, 0, 26)
     boton.Position = UDim2.new(0.05, 0, 0, posY)
     boton.BackgroundColor3 = Color3.fromRGB(35, 30, 50)
     boton.Text = ""
     boton.BorderSizePixel = 0
     boton.AutoButtonColor = false
-    boton.Parent = main
-    Instance.new("UICorner", boton).CornerRadius = UDim.new(0, 6)
+    boton.Parent = contenido
+    Instance.new("UICorner", boton).CornerRadius = UDim.new(0, 5)
 
     local texto = Instance.new("TextLabel")
-    texto.Size = UDim2.new(1, -50, 1, 0)
-    texto.Position = UDim2.new(0, 12, 0, 0)
+    texto.Size = UDim2.new(1, -40, 1, 0)
+    texto.Position = UDim2.new(0, 8, 0, 0)
     texto.BackgroundTransparency = 1
     texto.Text = nombre
     texto.TextColor3 = Color3.fromRGB(220, 220, 240)
@@ -139,16 +179,16 @@ local function crearToggle(nombre, posY, callback)
     texto.Parent = boton
 
     local estado = Instance.new("Frame")
-    estado.Size = UDim2.new(0, 40, 0, 20)
-    estado.Position = UDim2.new(1, -50, 0.5, -10)
+    estado.Size = UDim2.new(0, 30, 0, 16)
+    estado.Position = UDim2.new(1, -35, 0.5, -8)
     estado.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
     estado.BorderSizePixel = 0
     estado.Parent = boton
     Instance.new("UICorner", estado).CornerRadius = UDim.new(1, 0)
 
     local bolita = Instance.new("Frame")
-    bolita.Size = UDim2.new(0, 16, 0, 16)
-    bolita.Position = UDim2.new(0, 2, 0.5, -8)
+    bolita.Size = UDim2.new(0, 12, 0, 12)
+    bolita.Position = UDim2.new(0, 2, 0.5, -6)
     bolita.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
     bolita.BorderSizePixel = 0
     bolita.Parent = estado
@@ -158,46 +198,48 @@ local function crearToggle(nombre, posY, callback)
     boton.MouseButton1Click:Connect(function()
         activo = not activo
         if activo then
-            TweenService:Create(estado, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(120, 80, 255)}):Play()
-            TweenService:Create(bolita, TweenInfo.new(0.2), {Position = UDim2.new(1, -18, 0.5, -8), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+            TweenService:Create(estado, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(120, 80, 255)}):Play()
+            TweenService:Create(bolita, TweenInfo.new(0.15), {Position = UDim2.new(1, -14, 0.5, -6), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
         else
-            TweenService:Create(estado, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}):Play()
-            TweenService:Create(bolita, TweenInfo.new(0.2), {Position = UDim2.new(0, 2, 0.5, -8), BackgroundColor3 = Color3.fromRGB(200, 200, 200)}):Play()
+            TweenService:Create(estado, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}):Play()
+            TweenService:Create(bolita, TweenInfo.new(0.15), {Position = UDim2.new(0, 2, 0.5, -6), BackgroundColor3 = Color3.fromRGB(200, 200, 200)}):Play()
         end
         callback(activo)
     end)
 end
 
--- Slider
+-- ============================
+-- 🎚️ SLIDER STUDS
+-- ============================
 local sliderLabel = Instance.new("TextLabel")
-sliderLabel.Size = UDim2.new(0.9, 0, 0, 20)
-sliderLabel.Position = UDim2.new(0.05, 0, 0, 175)
+sliderLabel.Size = UDim2.new(0.9, 0, 0, 16)
+sliderLabel.Position = UDim2.new(0.05, 0, 0, 92)
 sliderLabel.BackgroundTransparency = 1
-sliderLabel.Text = "📏 Studs: 60"
+sliderLabel.Text = "📏 Studs: 30"
 sliderLabel.TextColor3 = Color3.fromRGB(220, 220, 240)
 sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
 sliderLabel.TextScaled = true
 sliderLabel.Font = Enum.Font.Gotham
-sliderLabel.Parent = main
+sliderLabel.Parent = contenido
 
 local sliderBG = Instance.new("Frame")
-sliderBG.Size = UDim2.new(0.9, 0, 0, 8)
-sliderBG.Position = UDim2.new(0.05, 0, 0, 205)
+sliderBG.Size = UDim2.new(0.9, 0, 0, 6)
+sliderBG.Position = UDim2.new(0.05, 0, 0, 112)
 sliderBG.BackgroundColor3 = Color3.fromRGB(40, 35, 55)
 sliderBG.BorderSizePixel = 0
-sliderBG.Parent = main
+sliderBG.Parent = contenido
 Instance.new("UICorner", sliderBG).CornerRadius = UDim.new(1, 0)
 
 local sliderFill = Instance.new("Frame")
-sliderFill.Size = UDim2.new(0.5, 0, 1, 0)
+sliderFill.Size = UDim2.new(0.1, 0, 1, 0)
 sliderFill.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
 sliderFill.BorderSizePixel = 0
 sliderFill.Parent = sliderBG
 Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(1, 0)
 
 local sliderBtn = Instance.new("Frame")
-sliderBtn.Size = UDim2.new(0, 16, 0, 16)
-sliderBtn.Position = UDim2.new(0.5, -8, 0.5, -8)
+sliderBtn.Size = UDim2.new(0, 14, 0, 14)
+sliderBtn.Position = UDim2.new(0.1, -7, 0.5, -7)
 sliderBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 sliderBtn.BorderSizePixel = 0
 sliderBtn.Parent = sliderBG
@@ -210,7 +252,7 @@ local function actualizarSlider(inputX)
     local relX = math.clamp(inputX - sliderBG.AbsolutePosition.X, 0, sliderBG.AbsoluteSize.X)
     local porcentaje = relX / sliderBG.AbsoluteSize.X
     sliderFill.Size = UDim2.new(porcentaje, 0, 1, 0)
-    sliderBtn.Position = UDim2.new(porcentaje, -8, 0.5, -8)
+    sliderBtn.Position = UDim2.new(porcentaje, -7, 0.5, -7)
     config.studs = math.floor(minStuds + (maxStuds - minStuds) * porcentaje)
     sliderLabel.Text = "📏 Studs: " .. config.studs
 end
@@ -236,24 +278,67 @@ sliderBG.InputBegan:Connect(function(input)
     end
 end)
 
-crearToggle("🛡️ Auto Parry", 50, function(on) config.autoParry = on end)
-crearToggle("⚡ Auto Spam", 90, function(on) config.autoSpam = on end)
-crearToggle("🔴 Ball ESP", 130, function(on) config.ballESP = on end)
+-- Status
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(0.9, 0, 0, 30)
+status.Position = UDim2.new(0.05, 0, 0, 130)
+status.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+status.BorderSizePixel = 0
+status.Text = "🔍 Buscando..."
+status.TextColor3 = Color3.fromRGB(200, 200, 220)
+status.TextScaled = true
+status.Font = Enum.Font.Gotham
+status.TextWrapped = true
+status.Parent = contenido
+Instance.new("UICorner", status).CornerRadius = UDim.new(0, 5)
+
+-- Botones
+crearToggle("🛡️ Parry", 5, function(on) config.autoParry = on end)
+crearToggle("⚡ Spam", 35, function(on) config.autoSpam = on end)
+crearToggle("🔴 ESP", 65, function(on) config.ballESP = on end)
 
 -- ============================
--- 🔴 ESP (Highlight en la bola)
+-- 🎯 MINIMIZAR
 -- ============================
-local function aplicarESP()
-    local bola = obtenerBola()
+local minimizado = false
+tituloBtn.MouseButton1Click:Connect(function()
+    minimizado = not minimizado
+    if minimizado then
+        TweenService:Create(main, TweenInfo.new(0.3), {Size = UDim2.new(0, 120, 0, 28)}):Play()
+        contenido.Visible = false
+        tituloBtn.Text = "⚔️ Abrir"
+    else
+        TweenService:Create(main, TweenInfo.new(0.3), {Size = UDim2.new(0, 180, 0, 250)}):Play()
+        task.wait(0.3)
+        contenido.Visible = true
+        tituloBtn.Text = "⚔️ Blade Ball (toca)"
+    end
+end)
+
+-- ============================
+-- 🔴 ESP
+-- ============================
+local function aplicarESP(bola)
     if bola and not bola:FindFirstChildOfClass("Highlight") then
         local hl = Instance.new("Highlight")
         hl.FillColor = Color3.fromRGB(255, 0, 0)
-        hl.OutlineColor = Color3.fromRGB(255, 80, 80)
-        hl.FillTransparency = 0.4
+        hl.OutlineColor = Color3.fromRGB(255, 0, 0)
+        hl.FillTransparency = 0.3
         hl.OutlineTransparency = 0
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         hl.Adornee = bola
         hl.Parent = bola
+    end
+end
+
+local function limpiarESP()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Highlight") then
+            local ad = obj.Adornee
+            if ad and esBolaReal(ad) then
+                obj:Destroy()
+            end
+        end
     end
 end
 
@@ -265,29 +350,30 @@ task.spawn(function()
         RunService.Heartbeat:Wait()
 
         local bola, dist = obtenerBola()
+        local jog, distJog = jugadorCercano()
 
-        -- Status en la UI
         if bola then
-            status.Text = string.format("🎯 Bola: %s\n📏 Dist: %.1f | Studs: %d", bola.Name, dist or 0, config.studs)
+            status.Text = string.format("🎯 %.0f | 👤 %.0f", dist or 0, distJog or 0)
         else
-            status.Text = "❌ No se encontró la bola"
+            status.Text = "❌ Sin bola | 👤 " .. string.format("%.0f", distJog or 0)
         end
 
-        -- ESP
         if config.ballESP and bola then
-            aplicarESP()
+            aplicarESP(bola)
+        elseif not config.ballESP then
+            limpiarESP()
         end
 
-        -- Auto Parry
         if config.autoParry and bola and dist and dist <= config.studs then
-            task.wait(config.parryDelay)
             activarParry()
+            task.wait(config.parryDelay)
         end
 
-        -- Auto Spam
-        if config.autoSpam then
+        if config.autoSpam and jog and distJog and distJog <= config.spamRange then
             activarParry()
             task.wait(config.spamDelay)
         end
     end
 end)
+
+print("✅ Blade Ball Mobile v2.0 cargado")
